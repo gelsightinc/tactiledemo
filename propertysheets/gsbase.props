@@ -1,0 +1,17 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ImportGroup Label="PropertySheets" />
+  <PropertyGroup Label="UserMacros">
+    <THIRDPARTYDIR>$(GS_THIRDPARTYDIR)</THIRDPARTYDIR>
+  </PropertyGroup>
+  <PropertyGroup>
+    <OutDir>$(SolutionDir)$(PlatformShortName)\$(Configuration)\$(PlatformToolset)\</OutDir>
+    <IntDir>$(PlatformShortName)\$(Configuration)\$(PlatformToolset)\</IntDir>
+  </PropertyGroup>
+  <ItemDefinitionGroup />
+  <ItemGroup>
+    <BuildMacro Include="THIRDPARTYDIR">
+      <Value>$(THIRDPARTYDIR)</Value>
+    </BuildMacro>
+  </ItemGroup>
+</Project>

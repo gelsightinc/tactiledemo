@@ -1,0 +1,22 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ImportGroup Label="PropertySheets" />
+  <PropertyGroup Label="UserMacros">
+    <OPENCVDIR>$(THIRDPARTYDIR)\opencv\v3.4.3</OPENCVDIR>
+  </PropertyGroup>
+  <PropertyGroup />
+  <ItemDefinitionGroup>
+    <Link>
+      <AdditionalDependencies>opencv_world343$(DEBUG_SUFFIX).lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>$(OPENCVDIR)\$(PlatformShortName)\$(Configuration)\$(PlatformToolset);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+    </Link>
+    <ClCompile>
+      <AdditionalIncludeDirectories>$(OPENCVDIR)\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <BuildMacro Include="OPENCVDIR">
+      <Value>$(OPENCVDIR)</Value>
+    </BuildMacro>
+  </ItemGroup>
+</Project>
