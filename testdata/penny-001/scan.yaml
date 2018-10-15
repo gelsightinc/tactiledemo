@@ -1,0 +1,47 @@
+images:
+  - image01.png
+iscalib: false
+calibradius: 0
+calibspacing: 0
+mmperpixel: 0.0231892040416
+calib: ..\model-f0-s2.yaml
+crop: [567, 229, 902, 828]
+cameratostage: []
+aligned: false
+createdon: 2018-10-15 14:30:12
+activeheightmap: penny-001-lin-f0-s2.tmd
+activenormalmap: penny-001-lin-f0-s2_nrm.png
+annotations: 
+  - type: Rectangle
+    name: Rectangle
+    h: 828
+    id: 2008576991
+    w: 902
+    x: 567
+    y: 229
+camera: 
+    autoexposure: false
+    autoframerate: false
+    autogain: false
+    autogamma: false
+    autosharpness: false
+    autoshutter: false
+    camera_name: Ximea
+    cameraid: CACAF1714002
+    cameratype: Ximea
+    format_ix: 0
+    framerate: 40
+    gain: 0
+    gamma: 1
+    mode_ix: 0
+    pixelformat_ix: 2
+    roih: 1216
+    roiw: 1936
+    roix: 0
+    roiy: 0
+    sharpness: 0
+    shutter: 2.001
+device: 
+    devicetype: Finger
+    lights: []
+    version: 2
