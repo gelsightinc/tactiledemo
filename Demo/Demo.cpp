@@ -2,25 +2,17 @@
 //
 
 #include "gelsightsdk.h"
-#include "gsanalysisroutine.h"
-#include "calibration.h"
-#include "geometry.h"
 #include "imageconvert.h"
 
 #include <string>
-#include <vector>
 #include <iostream>
-#include <fstream>
-#include <thread>
-#include <chrono>
-#include <memory>
 
 using std::string;
 
 //#define EXPOSURE_NEG
 
 // If USECAMERA is false, load an image from a file
-const bool USECAMERA = true;
+const bool USECAMERA = false;
 
 //
 // 
@@ -32,6 +24,7 @@ int main(int argc, char *argv[])
 	// IMPORTANT: Must call gsSdkInitialize() before using the SDK
 	//
 	try {
+        std::cout << "Initializing GelSightSdk" << std::endl;
 		gsSdkInitialize();
 	} catch(std::exception& ex) {
 		std::cerr << ex.what() << std::endl;
@@ -49,7 +42,12 @@ int main(int argc, char *argv[])
 	HANDLE camera;
 	
 	// Load Photometric stereo object for image -> normalmap
-	string setpath("../testdata/");
+	string setpath("../../testdata/");
+#ifdef _WIN32
+	setpath = std::string("../testdata/");
+#endif
+
+    std::cout << "Loading PhotometricStereo object" << std::endl;
 	const auto modelfile = setpath + "model.yaml";
 	auto pstereo = gs::LoadPhotometricStereo(modelfile);
 	if (!pstereo) {
@@ -66,6 +64,7 @@ int main(int argc, char *argv[])
 	gs::Image image;
 
 	if (USECAMERA) {
+        std::cout << "Opening Camera" << std::endl;
 		auto val = xiOpenDevice(0, &camera);
 		if (val != XI_OK) {
 			std::cerr << "Cannot open camera 0" << std::endl;
@@ -108,6 +107,7 @@ int main(int argc, char *argv[])
 		memset(&img, 0, sizeof(img));
 		img.size = sizeof(XI_IMG);
 
+        std::cout << "Grabbing single image" << std::endl;
 		val = xiGetImage(camera, 1000, &img);
 		if (val != XI_OK) {
 			std::cerr << "Umable to retrieve image" << std::endl;
@@ -120,6 +120,7 @@ int main(int argc, char *argv[])
 
 	} else {
 		// Load image from memory
+        std::cout << "Reading image from memory" << std::endl;
 		image = gs::util::ReadBgr8(setpath + "penny-001/image01.png");
 	}
 
@@ -129,27 +130,32 @@ int main(int argc, char *argv[])
 	// For tactile sensor, important to only compute 3D within specified 
 	// crop region
 	gs::RectI croproi(567, 229, 902, 828);
-	gs::Images images;
-	images.push_back(image);
+
 
 	try {
 		// Poisson integration for normalmap -> heightmap
 		auto poisson = gs::CreateIntegrator(gs::Version());
 
 		// Fast reconstruction
-		auto nrm = pstereo->linearNormalMap(images, croproi);
+		auto nrm = pstereo->linearNormalMap(image, croproi);
 
 		// Limit normal map to croi
+        std::cout << "3D reconstruction" << std::endl;
 		gs::NormalMap nrmc(nrm, croproi);
 		hm = poisson->integrateNormalMap(nrmc, pstereo->resolution());
 
-		
+        auto fpath = setpath + "output.tmd";
+        std::cout << "Saving 3D measurement in TMD format to " << fpath << std::endl;
+        gs::util::WriteTMD(fpath, hm);
+
 	} catch (gs::Exception& e) {
 		std::cerr << "Error running pstereo: " << e.what() <<  std::endl;
 	}
 
 	// Convert Heightmap to CV_32F
+    std::cout << "Converting to cv::Mat CV_32F" << std::endl;
 	auto mat = convertImage(hm);
+
 
 
 	if (USECAMERA) {
@@ -159,7 +165,9 @@ int main(int argc, char *argv[])
 	
 	std::cout << "done." << std::endl;
 	// Make the console wait for a character to exit
+#ifdef _WIN32
 	std::getchar();
+#endif
 	return 0;
 }
 

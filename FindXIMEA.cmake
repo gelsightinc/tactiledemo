@@ -6,21 +6,16 @@
 # Modified from OpenCV OpenCVFindXimea.cmake
 #
 
-set(XIMEA_PATH /opt/XIMEA)
-if (NOT EXISTS ${XIMEA_PATH})
-    message(STATUS "Ximea API not installed at ${XIMEA_PATH}")
-endif()
-
-
 find_path (XIMEA_INCLUDE
     NAMES xiApi.h
-    PATHS "${XIMEA_PATH}/include"
+    PATHS "/usr/include/m3api"
     DOC "xiApi include path"
 )
 
 find_library (XIMEA_LIB
-    NAMES xiapi_dng_store
-    PATHS "${XIMEA_PATH}/lib"
+    NAMES m3api
+    PATHS "/usr/lib"
+    DOC "xiApi library path"
 )
 
 
@@ -30,7 +25,6 @@ FIND_PACKAGE_HANDLE_STANDARD_ARGS(XIMEA DEFAULT_MSG XIMEA_LIB XIMEA_INCLUDE)
 if(XIMEA_FOUND)
     set(XIMEA_INCLUDE_DIRS ${XIMEA_INCLUDE})
     set(XIMEA_LIBRARIES ${XIMEA_LIB} )
-    set(XIMEA_BIN "${XIMEA_PATH}/bin")
 endif()
 
 
