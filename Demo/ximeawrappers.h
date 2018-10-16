@@ -3,7 +3,7 @@
 #define XIMEAWRAPPERS_H
 
 
-#include "xiapi.h"
+#include "xiApi.h"
 #include <string>
 #include "stdutil.h"
 #include "gsassert.h"
