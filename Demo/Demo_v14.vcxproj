@@ -93,11 +93,9 @@
   <ItemGroup>
     <ClCompile Include="Demo.cpp" />
     <ClCompile Include="imageconvert.cpp" />
-    <ClCompile Include="ximeawrappers.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="imageconvert.h" />
-    <ClInclude Include="ximeawrappers.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

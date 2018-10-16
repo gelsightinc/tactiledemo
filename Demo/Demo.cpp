@@ -5,7 +5,6 @@
 #include "gsanalysisroutine.h"
 #include "calibration.h"
 #include "geometry.h"
-#include "ximeawrappers.h"
 #include "imageconvert.h"
 
 #include <string>
@@ -21,8 +20,7 @@ using std::string;
 //#define EXPOSURE_NEG
 
 // If USECAMERA is false, load an image from a file
-const bool USECAMERA = false;
-
+const bool USECAMERA = true;
 
 //
 // 
@@ -39,15 +37,16 @@ int main(int argc, char *argv[])
 		std::cerr << ex.what() << std::endl;
 	}
 	
-	const auto nDevices = xi::Camera::count();  // Get this once
+	DWORD nDevices;
+	const auto stat = xiGetNumberDevices(&nDevices);
 
-	if (USECAMERA && nDevices == 0) {
+	if (USECAMERA && (stat != XI_OK || nDevices == 0)) {
 		std::cerr << "No devices found, exiting." << std::endl;
 		return 1;
 	}
 
 
-	std::shared_ptr<xi::Camera> camera;
+	HANDLE camera;
 	
 	// Load Photometric stereo object for image -> normalmap
 	string setpath("../testdata/");
@@ -67,45 +66,57 @@ int main(int argc, char *argv[])
 	gs::Image image;
 
 	if (USECAMERA) {
-		try {
-			const auto sn = xi::Camera::serialNumber(0);
-			auto cam = std::make_shared<xi::Camera>(XI_OPEN_BY_SN, sn);
-
-			// Camera settings
-			cam->BufferPolicy = XI_BP_UNSAFE;
-
-			cam->GpoSelector   = XI_GPO_PORT1;
-			cam->AcqTimingMode = XI_ACQ_TIMING_MODE_FRAME_RATE_LIMIT;
-			cam->GpiMode       = XI_GPI_OFF;
-
-	#ifdef EXPOSURE_NEG
-			cam->GpoMode      = XI_GPO_EXPOSURE_ACTIVE_NEG;
-	#else
-			cam->GpoMode      = XI_GPO_EXPOSURE_ACTIVE;
-	#endif
-			cam->ExposureTime = static_cast<float>(1000 * shutterms);
-			cam->ImageDataFormat = XI_RGB24;
-			cam->WbRed     = 1.7f;
-			cam->WbGreen   = 1.5f;
-			cam->WbBlue    = 1.0f;
-			cam->FrameRate = 60;
-
-			cam->GammaLuminosity = 1.0;
-
-
-			camera = cam;
-
-			// Start acquisition
-			camera->startAcquisition();
-
-			auto&& img = camera->image(1000);
-
-			// Convert to gs::Image
-			image = gs::convertImage(img);
-
-		} catch (std::exception& e) {
-			std::cerr << "Error grabbing frame: " << e.what() << std::endl;
+		auto val = xiOpenDevice(0, &camera);
+		if (val != XI_OK) {
+			std::cerr << "Cannot open camera 0" << std::endl;
+			return 1;
 		}
+
+		// Camera settings
+		val = xiSetParamInt(camera, XI_PRM_BUFFER_POLICY, XI_BP_UNSAFE);
+		val = xiSetParamInt(camera, XI_PRM_GPO_SELECTOR, XI_GPO_PORT1);
+		val = xiSetParamInt(camera, XI_PRM_ACQ_TIMING_MODE, XI_ACQ_TIMING_MODE_FRAME_RATE_LIMIT);
+		val = xiSetParamInt(camera, XI_PRM_GPI_MODE, XI_GPI_OFF);
+
+		// Strobe for triggering lights
+#ifdef EXPOSURE_NEG
+		val = xiSetParamInt(camera, XI_PRM_GPO_MODE, XI_GPO_EXPOSURE_ACTIVE_NEG);
+#else
+		val = xiSetParamInt(camera, XI_PRM_GPO_MODE, XI_GPO_EXPOSURE_ACTIVE);
+#endif
+
+		auto micros = static_cast<int>(1000 * shutterms);
+		val = xiSetParamInt(camera, XI_PRM_EXPOSURE, micros);
+		val = xiSetParamInt(camera, XI_PRM_IMAGE_DATA_FORMAT, XI_RGB24);
+
+		// White balance, frame rate, gamma
+		val = xiSetParamFloat(camera, XI_PRM_WB_KR, 1.7f);
+		val = xiSetParamFloat(camera, XI_PRM_WB_KG, 1.5f);
+		val = xiSetParamFloat(camera, XI_PRM_WB_KB, 1.0f);
+		val = xiSetParamFloat(camera, XI_PRM_FRAMERATE, 60.0f);
+		val = xiSetParamFloat(camera, XI_PRM_GAMMAY, 1.0f);
+		val = xiSetParamFloat(camera, XI_PRM_GAMMAC, 1.0f);
+
+
+		val = xiStartAcquisition(camera);
+		if (val != XI_OK) {
+			std::cerr << "Unable to start camera" << std::endl;
+			return 1;
+		}
+
+		XI_IMG img;
+		memset(&img, 0, sizeof(img));
+		img.size = sizeof(XI_IMG);
+
+		val = xiGetImage(camera, 1000, &img);
+		if (val != XI_OK) {
+			std::cerr << "Umable to retrieve image" << std::endl;
+			return 1;
+		}
+
+		// Convert to gs::Image
+		image = gs::convertImage(img);
+
 
 	} else {
 		// Load image from memory
@@ -140,23 +151,11 @@ int main(int argc, char *argv[])
 	// Convert Heightmap to CV_32F
 	auto mat = convertImage(hm);
 
-	// Save opencv mat
-	std::ofstream myfile;
-	myfile.open("C:/Users/kimo/Desktop/output.csv");
-	myfile << cv::format(mat, cv::Formatter::FMT_CSV) << std::endl;
-	myfile.close();
-
 
 	if (USECAMERA) {
 		// Stop acquisition
-		try {
-			camera->stopAcquisition();
-		} catch (std::exception& e) {
-			std::cerr << "Error stopping camera" << std::endl;
-		}
+		auto val = xiStopAcquisition(camera);
 	}
-	// Disable camera
-	camera.reset();
 	
 	std::cout << "done." << std::endl;
 	// Make the console wait for a character to exit

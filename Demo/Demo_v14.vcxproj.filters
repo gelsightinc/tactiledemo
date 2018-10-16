@@ -12,17 +12,11 @@
     <ClCompile Include="Demo.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="ximeawrappers.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="imageconvert.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="ximeawrappers.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="imageconvert.h">
       <Filter>Header Files</Filter>
     </ClInclude>
