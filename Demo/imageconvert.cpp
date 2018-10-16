@@ -1,6 +1,7 @@
 #include "imageconvert.h"
 #include "gelsightsdk.h"
 
+
 namespace gs {
 
 Image convertImage(const XI_IMG& img)
@@ -35,6 +36,16 @@ Image convertImage(const XI_IMG& img)
     }
 
      return image;
+}
+
+cv::Mat convertImage(const ImageF& img)
+{
+	const auto yd = img.height();
+	const auto xd = img.width();
+	cv::Mat mat(yd, xd, CV_32F);
+
+	memcpy((float*)(mat.data), img.ptr(0), xd*yd*sizeof(float));
+	return mat;
 }
 
 }
