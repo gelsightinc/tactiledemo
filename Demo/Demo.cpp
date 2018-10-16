@@ -5,6 +5,8 @@
 #include "gsanalysisroutine.h"
 #include "calibration.h"
 #include "geometry.h"
+#include "ximeawrappers.h"
+#include "imageconvert.h"
 
 #include <string>
 #include <vector>
@@ -13,6 +15,8 @@
 #include <thread>
 #include <chrono>
 #include <memory>
+
+//#define EXPOSURE_NEG
 
 using std::string;
 using std::cout;
@@ -149,103 +153,9 @@ vector<string> doscan(const string& foldername)
 	return paths;
 }
 
-/*
- * This function shows how to calibrate the system from lists of image paths
- */
-void runCalibrationFromImagePaths()
-{
-	// List of BGA Targets
-	std::vector<std::shared_ptr<gs::CalibrationTarget>> targets;
-	for (int i = 0; i < 4; ++i) {
-
-		// Get image paths for a new scan
-		auto paths = doscan("calib" + std::to_string(i+1));
-
-		// Create scan object for thes image paths
-		auto scan = gs::CreateScan(paths);
-
-		// Set BGA parameters - pitch (spacing) and radius
-		scan->setCalibDimensions(0.4, 0.15625);
-
-		// Set resolution
-		scan->setResolution(0.007812500000000002, gs::Unit::MM);
-
-		// Save the scan file as YAML format
-		auto scanp = string("../testdata/calib") + "/scan" + std::to_string(i+1) + ".yaml";
-		scan->save(scanp, gs::Format::YAML);
-
-		// Now create BGAs from scans
-		// Create list of calibration targets
-		auto target = std::make_shared<gs::BgaTarget>(string("../testdata/calib"));
-
-		targets.push_back(target);
-	}
-
-
-	cout << "Run calibration algorithm..." << endl;
-    auto pstereo = gs::CalibratePhotometricStereo(targets, 0.007812500000000002, gs::Version());
-
-
-	// Save calibration file as model.yaml
-	pstereo->save("../testdata/testmodel.yaml", gs::Format::YAML);
-
-
-}
 
 
 
-//
-// Demo of offset analysis
-//
-void runoffset1()
-{
-	string setpath("../testdata/Offset/");
-	string tmdpath = setpath + "offset1.tmd";
-
-	try {
-
-		// Try loading analysis manager
-		auto am = gs::DefaultAnalysisManager();
-
-		auto hm = gs::util::ReadTMD(tmdpath);
-
-		auto scan = gs::CreateScan(hm);
-		
-		auto r = am->newRoutine("Offset");
-
-		// Add a line for analysis
-		auto ln = std::make_shared<gs::LineShape>(0, 32, 63, 32);
-
-		scan->addShape(ln);
-		r->setInt("primaryshapeid", ln->id());
-
-		// Profile extraction parameters
-		r->setBool("level",        true);
-		r->setDouble("levelstart", 0.00);
-		r->setDouble("levelend",   0.02);
-		r->setInt("numprofiles",   1);
-
-		// Offset parameters
-		r->setDouble("region1start", 0.01);
-		r->setDouble("region1end",   0.02);
-		r->setString("region1mode",  "average");
-		r->setDouble("region2start", 0.04);
-		r->setDouble("region2end",   0.05);
-		r->setString("region2mode",  "average");
-
-		// Create scan context for calling analysis
-		gs::ScanContext ct(*scan);
-
-		string msg;
-		gs::Error err;
-		auto valid = r->validate(ct, err, msg);
-
-		r->analyze(ct);
-		auto dst = r->getDouble("offset");
-
-		std::cout << "offset: " << dst << std::endl;
-	} catch (gs::Exception&) {}
-}
 
 
 
@@ -269,16 +179,122 @@ int main(int argc, char *argv[])
 		std::cerr << ex.what() << endl;
 	}
 	
+	const auto nDevices = xi::Camera::count();  // Get this once
+
+	if (nDevices == 0) {
+		std::cerr << "No devices found, exiting." << std::endl;
+		return 1;
+	}
+
+	const auto sn = xi::Camera::serialNumber(0);
+
+	std::shared_ptr<xi::Camera> camera;
+	
+	// Load Photometric stereo object for image -> normalmap
+	string setpath("../testdata/");
+	const auto modelfile = setpath + "model.yaml";
+	auto pstereo = gs::LoadPhotometricStereo(modelfile);
+	if (!pstereo) {
+		std::cerr << "Cannot load calibration" << std::endl;
+	}
+ 
+	// Try to load camera shutter from calibration file
+	double shutterms = 1.0;
+	auto camProps   = pstereo->getPropMap(PK_CAMERA);
+	if (camProps.find("shutter") != camProps.end()) {
+		shutterms = std::stod(camProps["shutter"]);
+	}
+
+
 
 	try {
-        //runsavedcalib();
-        runcalibration();
+		auto cam = std::make_shared<xi::Camera>(XI_OPEN_BY_SN, sn);
 
-	} catch (gs::Exception& e) {
-		std::cerr << e.what() << std::endl;
+		// Camera settings
+		cam->BufferPolicy = XI_BP_UNSAFE;
+
+		cam->GpoSelector   = XI_GPO_PORT1;
+		cam->AcqTimingMode = XI_ACQ_TIMING_MODE_FRAME_RATE_LIMIT;
+		cam->GpiMode       = XI_GPI_OFF;
+
+#ifdef EXPOSURE_NEG
+		cam->GpoMode      = XI_GPO_EXPOSURE_ACTIVE_NEG;
+#else
+		cam->GpoMode      = XI_GPO_EXPOSURE_ACTIVE;
+#endif
+		cam->ExposureTime = static_cast<float>(1000 * shutterms);
+		cam->ImageDataFormat = XI_RGB24;
+		cam->WbRed     = 1.7f;
+		cam->WbGreen   = 1.5f;
+		cam->WbBlue    = 1.0f;
+		cam->FrameRate = 60;
+
+		cam->GammaLuminosity = 1.0;
+
+
+		camera = cam;
+
+	} catch (std::exception& e) {
+		std::cerr << "Error initializing camera" << e.what() << std::endl;
 		
 	}
+
+
+	// Start acquisition
+	gs::Image image;
+	try {
+		camera->startAcquisition();
+
+		auto&& img = camera->image(1000);
+
+		// Convert to gs::Image
+		image = gs::convertImage(img);
+
+	} catch (std::exception& e) {
+		std::cerr << "Error grabbing frame: " << e.what() << std::endl;
+	}
+
+	// Do 3D reconstruction using saved calibration
+	gs::HeightMap hm;
+
+	// For tactile sensor, important to only compute 3D within specified 
+	// crop region
+	gs::RectI croproi(567, 229, 902, 828);
+	gs::Images images;
+	images.push_back(image);
+
+	try {
+
+		// Poisson integration for normalmap -> heightmap
+		auto poisson = gs::CreateIntegrator(gs::Version());
+
+		// Fast reconstruction
+		auto nrm = pstereo->linearNormalMap(images, croproi);
+
+		// Limit normal map to croi
+		gs::NormalMap nrmc(nrm, croproi);
+		hm = poisson->integrateNormalMap(nrmc, pstereo->resolution());
+
+		gs::util::WritePng("C:/Users/kimo/Desktop/testcolor.png", image);
+		gs::util::WriteTMD("C:/Users/kimo/Desktop/test.tmd", hm, pstereo->resolution(), 0.0, 0.0);
+		gs::util::WriteNormalMap("C:/Users/kimo/Desktop/normals.png", nrm, 16);
+		
+	} catch (gs::Exception& e) {
+		std::cerr << "Error running pstereo: " << e.what() <<  std::endl;
+	}
+
+
+	// Stop acquisition
+	try {
+		camera->stopAcquisition();
+	} catch (std::exception& e) {
+		std::cerr << "Error stopping camera" << std::endl;
+	}
+
+	// Disable camera
+	camera.reset();
 	
+	std::cout << "done." << std::endl;
 	// Make the console wait for a character to exit
 	std::getchar();
 	return 0;
