@@ -12,7 +12,7 @@ using std::string;
 //#define EXPOSURE_NEG
 
 // If USECAMERA is false, load an image from a file
-const bool USECAMERA = false;
+const bool USECAMERA = true;
 
 //
 // 
@@ -145,8 +145,11 @@ int main(int argc, char *argv[])
 		hm = poisson->integrateNormalMap(nrmc, pstereo->resolution());
 
         auto fpath = setpath + "output.tmd";
+        auto impath = setpath + "frame.png";
         std::cout << "Saving 3D measurement in TMD format to " << fpath << std::endl;
         gs::util::WriteTMD(fpath, hm);
+	std::cout << "Saving image in PNG format to " << impath << std::endl;
+	gs::util::WritePng(impath, image);
 
 	} catch (gs::Exception& e) {
 		std::cerr << "Error running pstereo: " << e.what() <<  std::endl;
